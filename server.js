@@ -6,7 +6,7 @@ const authMiddleware = require("./middleware/auth");
 const { generateToken } = require("./utils/tokenGenerator");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3010;
 
 // Session storage (in-memory)
 const loginSessions = {};
@@ -15,10 +15,11 @@ const otpStore = {};
 // Middleware
 app.use(requestLogger);
 app.use(express.json());
+app.use(cookieParser());
 
 
 app.get("/", (req, res) => {
-  res.json({
+  res.status(200).json({
     challenge: "Complete the Authentication Flow",
     instruction:
       "Complete the authentication flow and obtain a valid access token.",
@@ -29,7 +30,6 @@ app.get("/", (req, res) => {
 app.post("/auth/login", (req, res) => {
   try {
     const { email, password } = req.body;
-
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password required" });
     }
@@ -53,6 +53,7 @@ app.post("/auth/login", (req, res) => {
 
     return res.status(200).json({
       message: "OTP sent",
+      otp: otp,
       loginSessionId,
     });
   } catch (error) {
@@ -68,31 +69,29 @@ app.post("/auth/verify-otp", (req, res) => {
     const { loginSessionId, otp } = req.body;
 
     if (!loginSessionId || !otp) {
-      return res
-        .status(400)
-        .json({ error: "loginSessionId and otp required" });
+      return res.status(400).json({ error: "loginSessionId and otp required" });
     }
 
     const session = loginSessions[loginSessionId];
+    // ---- storedOtp ----
+    const storedOtp = otpStore[loginSessionId];
 
-    if (!session) {
-      return res.status(401).json({ error: "Invalid session" });
-    }
+    if (!session) return res.status(401).json({ error: "Invalid session" });
+    if (Date.now() > session.expiresAt) return res.status(401).json({ error: "Session expired" });
 
-    if (Date.now() > session.expiresAt) {
-      return res.status(401).json({ error: "Session expired" });
-    }
-
-    if (parseInt(otp) !== otpStore[loginSessionId]) {
+    // FIX: Ensure both are compared as numbers or both as strings
+    if (Number(otp) !== Number(storedOtp)) {
       return res.status(401).json({ error: "Invalid OTP" });
     }
 
+    // Set the cookie
     res.cookie("session_token", loginSessionId, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 15 * 60 * 1000, // 15 minutes
+      path: '/', // Ensure cookie is accessible across the site
+      maxAge: 15 * 60 * 1000,
     });
 
+    // Clean up OTP but KEEP the session for the next step (/auth/token)
     delete otpStore[loginSessionId];
 
     return res.status(200).json({
@@ -100,17 +99,15 @@ app.post("/auth/verify-otp", (req, res) => {
       sessionId: loginSessionId,
     });
   } catch (error) {
-    return res.status(500).json({
-      status: "error",
-      message: "OTP verification failed",
-    });
+    return res.status(500).json({ status: "error", message: "OTP verification failed" });
   }
 });
 
+
 app.post("/auth/token", (req, res) => {
   try {
-    const token = req.headers.authorization;
-
+    const token = req.cookies.session_token;
+    console.log(token)
     if (!token) {
       return res
         .status(401)

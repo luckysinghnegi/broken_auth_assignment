@@ -1,0 +1,16 @@
+--- TASK 1: LOGIN ---
+Command: Invoke-RestMethod -Uri "http://localhost:3010/auth/login" -Method Post -Body $body ...
+Response: { "message": "OTP sent", "loginSessionId": "n0qmcf" }
+Server Log: [OTP] Session n0qmcf generated: 774039
+
+--- TASK 2: VERIFY OTP ---
+Command: Invoke-RestMethod -Uri "http://localhost:3010/auth/verify-otp" ...
+Response: { "message": "OTP verified", "sessionId": "n0qmcf" }
+
+--- TASK 3: GET TOKEN ---
+Command: Invoke-RestMethod -Uri "http://localhost:3010/auth/token" ...
+Response: { "access_token": "eyJhbG...", "expires_in": 900 }
+
+--- TASK 4: ACCESS PROTECTED ROUTE ---
+Command: Invoke-RestMethod -Uri "http://localhost:3010/protected" -Headers @{ Authorization = "Bearer ..." }
+Response: { "message": "Access granted", "user": { "email": "singh.lucky.tech11@gmail.com" ... }, "success_flag": "FLAG-c2luZ2..." }
